@@ -44,7 +44,8 @@ public class NoLossBurstTopicMessageDeliveryImpl implements MessageDeliveryStrat
      * {@inheritDoc}
      */
     @Override
-    public int deliverMessageToSubscriptions(String destination, Set<DeliverableAndesMetadata> messages) throws
+    public int deliverMessageToSubscriptions(String destination, String storageQueue, Set<DeliverableAndesMetadata>
+            messages) throws
             AndesException {
         int sentMessageCount = 0;
         Iterator<DeliverableAndesMetadata> iterator = messages.iterator();

@@ -407,8 +407,12 @@ public class MessageFlusher {
 
     /**
      * Read messages from the buffer and send messages to subscribers
+     *
+     * @param subDestination  Destination of the subscription
+     * @param storageQueue  Storage Queue related to destination
+     * @throws AndesException
      */
-    public void sendMessagesInBuffer(String subDestination) throws AndesException {
+    public void sendMessagesInBuffer(String subDestination, String storageQueue) throws AndesException {
         /**
          * Now messages are read to the memory. Send the read messages to subscriptions
          */
@@ -428,8 +432,8 @@ public class MessageFlusher {
                 log.debug("Sending messages from buffer num of msg = "
                         + messageDeliveryInfo.getSizeOfMessageBuffer());
             }
-            sendMessagesToSubscriptions(messageDeliveryInfo.destination,
-                    messageDeliveryInfo.readButUndeliveredMessages);
+            sendMessagesToSubscriptions(messageDeliveryInfo.destination, storageQueue, messageDeliveryInfo
+                    .readButUndeliveredMessages);
 
         } catch (Exception e) {
             /**
@@ -455,11 +459,13 @@ public class MessageFlusher {
      * Check whether there are active subscribers and send
      *
      * @param destination queue name
+     * @param storageQueue storage queue of messages
      * @param messages    metadata set
      * @return how many messages sent
      * @throws Exception
      */
-    public int sendMessagesToSubscriptions(String destination, Set<DeliverableAndesMetadata> messages)
+    public int sendMessagesToSubscriptions(String destination, String storageQueue, Set<DeliverableAndesMetadata>
+            messages)
             throws Exception {
 
         if(messages.iterator().hasNext()) {
@@ -468,9 +474,9 @@ public class MessageFlusher {
             boolean isTopic = firstMessage.isTopic();
 
             if (isTopic) {
-                return topicMessageFlusher.deliverMessageToSubscriptions(destination, messages);
+                return topicMessageFlusher.deliverMessageToSubscriptions(destination, storageQueue, messages);
             } else {
-                return queueMessageFlusher.deliverMessageToSubscriptions(destination, messages);
+                return queueMessageFlusher.deliverMessageToSubscriptions(destination, storageQueue, messages);
             }
         } else {
             if(log.isDebugEnabled()) {

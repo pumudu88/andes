@@ -44,7 +44,8 @@ public class SlowestSubscriberTopicMessageDeliveryImpl implements MessageDeliver
      * {@inheritDoc}
      */
     @Override
-    public int deliverMessageToSubscriptions(String destination, Set<DeliverableAndesMetadata> messages) throws
+    public int deliverMessageToSubscriptions(String destination, String storageQueue,Set<DeliverableAndesMetadata>
+            messages) throws
             AndesException {
 
         int sentMessageCount = 0;
