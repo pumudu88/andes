@@ -20,6 +20,7 @@ package org.wso2.andes.kernel;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.andes.kernel.slot.SlotDeliveryWorkerManager;
 import org.wso2.andes.subscription.LocalSubscription;
 import org.wso2.andes.subscription.SubscriptionStore;
 
@@ -44,7 +45,8 @@ public class FlowControlledQueueMessageDeliveryImpl implements MessageDeliverySt
      * {@inheritDoc}
      */
     @Override
-    public int deliverMessageToSubscriptions(String destination, Set<DeliverableAndesMetadata> messages) throws
+    public int deliverMessageToSubscriptions(String destination, String storageQueue, Set<DeliverableAndesMetadata>
+            messages) throws
             AndesException {
 
         int sentMessageCount = 0;
@@ -134,6 +136,8 @@ public class FlowControlledQueueMessageDeliveryImpl implements MessageDeliverySt
         // clear all tracking when orphan slot situation
         if (noSubscribersForDestination) {
             messages.clear();
+            SlotDeliveryWorkerManager.getInstance().stopDeliveryForDestination(storageQueue);
+
         }
 
         return sentMessageCount;

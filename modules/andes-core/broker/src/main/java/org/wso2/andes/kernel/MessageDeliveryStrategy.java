@@ -30,10 +30,12 @@ public interface MessageDeliveryStrategy {
      * Deliver message. It will find current subscriptions to deliver by the destination of the message
      * and send the messages accordingly
      * @param destination destination of messages
+     * @param storageQueue Storage queue related to messages
      * @param messages messages to be sent
      * @return number of messages sent
      * @throws AndesException in case of a delivery failure
      */
-    public int deliverMessageToSubscriptions(String destination, Set<DeliverableAndesMetadata> messages) throws
+    public int deliverMessageToSubscriptions(String destination, String storageQueue, Set<DeliverableAndesMetadata>
+            messages) throws
             AndesException;
 }
