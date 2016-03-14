@@ -575,7 +575,7 @@ public class SubscriptionStore {
         if (!wildCardSubscription) {
             Set<AndesSubscription> subscriptionList = clusterSubscriptionMap.get(destination);
             if (null == subscriptionList) {
-                subscriptionList = new LinkedHashSet<>();
+                subscriptionList = Collections.newSetFromMap(new ConcurrentHashMap<AndesSubscription, Boolean>());
             }
             //TODO: need to use a MAP here instead of a SET. Here we assume a subscription is not updated and added.
             if(SubscriptionChange.ADDED == type) {
