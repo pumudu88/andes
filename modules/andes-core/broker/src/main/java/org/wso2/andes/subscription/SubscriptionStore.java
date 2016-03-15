@@ -33,12 +33,9 @@ import org.wso2.carbon.metrics.manager.Gauge;
 import org.wso2.carbon.metrics.manager.Level;
 import org.wso2.carbon.metrics.manager.MetricManager;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -578,7 +575,7 @@ public class SubscriptionStore {
                 subscriptionList = Collections.newSetFromMap(new ConcurrentHashMap<AndesSubscription, Boolean>());
             }
             //TODO: need to use a MAP here instead of a SET. Here we assume a subscription is not updated and added.
-            if(SubscriptionChange.ADDED == type) {
+            if(SubscriptionChange.ADDED == type || SubscriptionChange.MERGED == type) {
                 boolean subscriptionAdded = subscriptionList.add(subscription);
                 if(!subscriptionAdded) {
                     Iterator<AndesSubscription> subscriptionIterator = subscriptionList.iterator();
@@ -741,14 +738,9 @@ public class SubscriptionStore {
      * @throws AndesException
      */
     public void updateLocalSubscriptionSubscription(LocalSubscription subscription) throws AndesException {
-        String destinationQueue = getDestination(subscription);
+        updateLocalSubscriptionInDB(subscription);
         String destinationTopic = subscription.getSubscribedDestination();
-        //Update the subscription
-        String destinationIdentifier = (subscription.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destinationTopic;
-        String subscriptionID = subscription.getSubscribedNode() + "_" + subscription.getSubscriptionID();
-
-        andesContextStore.updateDurableSubscription(destinationIdentifier, subscriptionID, subscription.encodeAsStr());
-
+        String destinationQueue = getDestination(subscription);
         //update local subscription map
         if (subscription.getTargetQueueBoundExchangeName().equals(AMQPUtils.DIRECT_EXCHANGE_NAME)) {
             Set<LocalSubscription> localSubscriptions = localQueueSubscriptionMap.get(destinationQueue);
@@ -776,6 +768,16 @@ public class SubscriptionStore {
 
         UUID channelIDOfSubscription = subscription.getChannelID();
         channelIdMap.put(channelIDOfSubscription, subscription);
+    }
+
+    public void updateLocalSubscriptionInDB(LocalSubscription subscription) throws AndesException{
+
+        String destinationTopic = subscription.getSubscribedDestination();
+        //Update the subscription
+        String destinationIdentifier = (subscription.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destinationTopic;
+        String subscriptionID = subscription.getSubscribedNode() + "_" + subscription.getSubscriptionID();
+
+        andesContextStore.updateDurableSubscription(destinationIdentifier, subscriptionID, subscription.encodeAsStr());
     }
 
     /**
