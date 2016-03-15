@@ -572,34 +572,33 @@ public class SubscriptionStore {
         if (!wildCardSubscription) {
             Set<AndesSubscription> subscriptionList = clusterSubscriptionMap.get(destination);
             if (null == subscriptionList) {
+                // This set is accessed through StateEventHandler and MessagePreProcessor
                 subscriptionList = Collections.newSetFromMap(new ConcurrentHashMap<AndesSubscription, Boolean>());
             }
             //TODO: need to use a MAP here instead of a SET. Here we assume a subscription is not updated and added.
             if(SubscriptionChange.ADDED == type || SubscriptionChange.MERGED == type) {
                 boolean subscriptionAdded = subscriptionList.add(subscription);
                 if(!subscriptionAdded) {
-                    Iterator<AndesSubscription> subscriptionIterator = subscriptionList.iterator();
-                    while(subscriptionIterator.hasNext()) {
-                        AndesSubscription andesSubscription = subscriptionIterator.next();
-                        if(subscription.equals(andesSubscription)) {
+                    for (AndesSubscription andesSubscription : subscriptionList) {
+                        if (subscription.equals(andesSubscription)) {
                             andesSubscription.setHasExternalSubscriptions(true);
                             break;
                         }
                     }
                 }
             } else if(SubscriptionChange.DISCONNECTED == type) {
+                subscription.setHasExternalSubscriptions(false);
                 boolean subscriptionAdded = subscriptionList.add(subscription);
                 if (!subscriptionAdded){
-                    Iterator<AndesSubscription> subscriptionIterator = subscriptionList.iterator();
-                    while(subscriptionIterator.hasNext()) {
-                        AndesSubscription andesSubscription = subscriptionIterator.next();
-                        if(subscription.equals(andesSubscription)) {
+                    for (AndesSubscription andesSubscription : subscriptionList) {
+                        if (subscription.equals(andesSubscription)) {
                             andesSubscription.setHasExternalSubscriptions(false);
                             break;
                         }
                     }
                 } else {
-                    log.warn("Cannot disconnect non-existing subscription");
+                    log.info("Cluster subscription is not present in Map. Adding subscription as an inactive " +
+                            "subscription " + subscription);
                 }
 
             } else if(SubscriptionChange.DELETED == type) {
