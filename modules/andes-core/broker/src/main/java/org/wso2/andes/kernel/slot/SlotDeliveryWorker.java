@@ -226,17 +226,17 @@ public class SlotDeliveryWorker extends Thread implements StoreHealthListener{
                 } catch (AndesException e) {
                     log.error("Error running Message Store Reader " + e.getMessage(), e);
                 } catch (ConnectionException e) {
-                    log.error("Error occurred while connecting to the thrift coordinator " +
-                            e.getMessage(), e);
+                    log.error("Error occurred while connecting to the thrift coordinator " + e.getMessage(), e);
                     setRunning(false);
                     //Any exception should be caught here. Otherwise SDW thread will stop
                     //and MB node will become useless
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     log.error("Error while running Slot Delivery Worker. ", e);
                 }
             }
         }
 
+        log.info("SlotDeliveryWorker stopped. Thread name " + Thread.currentThread().getName());
     }
 
     /**
@@ -447,7 +447,15 @@ public class SlotDeliveryWorker extends Thread implements StoreHealthListener{
             log.debug("Releasing tracking of messages for slot " + slot.toString());
         }
         slot.deleteAllMessagesInSlot();
-        storageQueueToSlotTracker.get(slot.getStorageQueueName()).remove(slot.getId());
+
+        Map<String, Slot> slotsOfQueue = storageQueueToSlotTracker.get(slot.getStorageQueueName());
+        if (null != slotsOfQueue) {
+            slotsOfQueue.remove(slot.getId());
+        } else {
+            log.debug("Slot has been deleted by the SlotDeliveryWorker before the SlotDeletionExecutor can get to it." +
+                    " Slot : " + slot);
+        }
+
     }
 
     /**

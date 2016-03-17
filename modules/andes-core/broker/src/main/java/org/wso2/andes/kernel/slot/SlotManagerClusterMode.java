@@ -374,6 +374,8 @@ public class SlotManagerClusterMode {
 						log.debug("Returned slot " + slotToBeReAssigned + "from node " +
 						          nodeId + " as member left");
 					}
+				} else { // Delete empty slots
+					SlotDeletionExecutor.getInstance().executeSlotDeletion(slotToBeReAssigned);
 				}
 			}
 			slotAgent.deleteOverlappedSlots(nodeId);
@@ -387,10 +389,10 @@ public class SlotManagerClusterMode {
 	/**
 	 * Remove slot entry from slot assignment
 	 *
-	 * @param queueName name of the queue which is owned by the slot to be deleted
+	 * @param storageQueueName name of the queue which is owned by the slot to be deleted
 	 * @param emptySlot reference of the slot to be deleted
 	 */
-	public boolean deleteSlot(String queueName, Slot emptySlot, String nodeId) throws AndesException {
+	public boolean deleteSlot(String storageQueueName, Slot emptySlot, String nodeId) throws AndesException {
 		boolean slotDeleted = false;
 
 		long startMsgId = emptySlot.getStartMessageId();
@@ -403,9 +405,9 @@ public class SlotManagerClusterMode {
 		if (slotDeleteSafeZone > endMsgId) {
 			String lockKey = nodeId + SlotManagerClusterMode.class;
 			synchronized (lockKey.intern()) {
-				slotDeleted = slotAgent.deleteSlot(nodeId, queueName, startMsgId, endMsgId);
+				slotDeleted = slotAgent.deleteSlot(nodeId, storageQueueName, startMsgId, endMsgId);
 				if (log.isDebugEnabled()) {
-					log.debug(" Deleted slot id = " + emptySlot.getId() + " queue name = " + queueName + " deleteSuccess: " + slotDeleted);
+					log.debug(" Deleted slot id = " + emptySlot.getId() + " queue name = " + storageQueueName + " deleteSuccess: " + slotDeleted);
 				}
 			}
 		} else {
@@ -586,28 +588,30 @@ public class SlotManagerClusterMode {
             @Override
             public void run() {
 
-                long lastId = SlotMessageCounter.getInstance().getCurrentNodeSafeZoneId();
-                //TODO: Delete if the queue has not progressed
-                for (String queueName : queuesToRecover) {
-                    // Trigger a submit slot for each queue so that new slots are created
-                    // for queues that have not published any messages after a node crash
-                    try {
-                        updateMessageID(queueName, deletedNodeId, lastId - 1, lastId, lastId);
-                    } catch (AndesException ex) {
-                        log.error("Failed to update message id", ex);
-                    }
-                }
-                slotRecoveryScheduled.set(false);
                 try {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Removing " + deletedNodeId +
-                                " from safe zone calculation.");
+                    long lastId = SlotMessageCounter.getInstance().getCurrentNodeSafeZoneId();
+                    //TODO: Delete if the queue has not progressed
+                    for (String queueName : queuesToRecover) {
+                        // Trigger a submit slot for each queue so that new slots are created
+                        // for queues that have not published any messages after a node crash
+                        try {
+                            updateMessageID(queueName, deletedNodeId, lastId - 1, lastId, lastId);
+                        } catch (AndesException ex) {
+                            log.error("Failed to update message id", ex);
+                        }
                     }
-                    slotAgent.removePublisherNode(deletedNodeId);
-                } catch (AndesException e) {
-                    log.error(
-                            "Failed to remove publisher node ID from safe zone calculation",
-                            e);
+                    slotRecoveryScheduled.set(false);
+                    try {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Removing " + deletedNodeId + " from safe zone calculation.");
+                        }
+                        slotAgent.removePublisherNode(deletedNodeId);
+                    } catch (AndesException e) {
+                        log.error("Failed to remove publisher node ID from safe zone calculation", e);
+                    }
+
+                } catch (Throwable e) {
+                    log.error("Error occurred while trying to run recover slot scheduler", e);
                 }
             }
         }, SlotMessageCounter.getInstance().SLOT_SUBMIT_TIMEOUT, TimeUnit.MILLISECONDS);
