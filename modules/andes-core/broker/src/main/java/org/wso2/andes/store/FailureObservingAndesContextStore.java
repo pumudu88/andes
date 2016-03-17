@@ -107,6 +107,19 @@ public class FailureObservingAndesContextStore implements AndesContextStore {
      * {@inheritDoc}
      */
     @Override
+    public boolean isSubscriptionExist(String subscriptionId) throws AndesException {
+        try {
+            return wrappedAndesContextStoreInstance.isSubscriptionExist(subscriptionId);
+        } catch (AndesStoreUnavailableException exception) {
+            notifyFailures(exception);
+            throw exception;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void storeDurableSubscription(String destinationIdentifier, String subscriptionID,
                                          String subscriptionEncodeAsStr) throws AndesException {
         try {

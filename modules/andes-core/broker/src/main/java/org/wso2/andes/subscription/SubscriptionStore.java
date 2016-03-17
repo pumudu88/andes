@@ -680,7 +680,11 @@ public class SubscriptionStore {
             String subscriptionID = subscription.getSubscribedNode() + "_" + subscription.getSubscriptionID();
 
             if (type == SubscriptionChange.ADDED) {
-                andesContextStore.storeDurableSubscription(destinationIdentifier, subscriptionID, subscription.encodeAsStr());
+                if(!andesContextStore.isSubscriptionExist(subscriptionID)) {
+                    andesContextStore.storeDurableSubscription(destinationIdentifier, subscriptionID, subscription.encodeAsStr());
+                } else {
+                    updateLocalSubscriptionSubscription(subscription);
+                }
                 log.info("Local subscription " + type + " " + subscription.toString());
             } else { // @DISCONNECT
                 updateLocalSubscriptionSubscription(subscription);
