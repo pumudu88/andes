@@ -26,8 +26,8 @@ import org.wso2.andes.subscription.SubscriptionStore;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  * Strategy definition for queue message delivery
@@ -45,13 +45,13 @@ public class FlowControlledQueueMessageDeliveryImpl implements MessageDeliverySt
      * {@inheritDoc}
      */
     @Override
-    public int deliverMessageToSubscriptions(String destination, String storageQueue, Set<DeliverableAndesMetadata>
+    public int deliverMessageToSubscriptions(String destination, String storageQueue, Map<Long, DeliverableAndesMetadata>
             messages) throws
             AndesException {
 
         int sentMessageCount = 0;
         boolean noSubscribersForDestination = false;
-        Iterator<DeliverableAndesMetadata> iterator = messages.iterator();
+        Iterator<DeliverableAndesMetadata> iterator = messages.values().iterator();
 
 
         while (iterator.hasNext()) {

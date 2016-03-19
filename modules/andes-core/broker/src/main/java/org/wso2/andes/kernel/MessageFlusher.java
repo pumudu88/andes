@@ -35,8 +35,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 
 /**
@@ -164,8 +163,8 @@ public class MessageFlusher {
          * in-memory message list scheduled to be delivered. These messages will be flushed
          * to subscriber
          */
-        private Set<DeliverableAndesMetadata> readButUndeliveredMessages = new
-                ConcurrentSkipListSet<>();
+        private Map<Long, DeliverableAndesMetadata> readButUndeliveredMessages = new
+                ConcurrentSkipListMap<>();
 
         /***
          * In case of a purge, we must store the timestamp when the purge was called.
@@ -187,7 +186,7 @@ public class MessageFlusher {
          * @param message message metadata to buffer
          */
         public void bufferMessage(DeliverableAndesMetadata message) {
-            readButUndeliveredMessages.add(message);
+            readButUndeliveredMessages.put(message.getMessageID(), message);
             message.markAsBuffered();
             //Tracing message
             MessageTracer.trace(message, MessageTracer.METADATA_BUFFERED_FOR_DELIVERY);
@@ -464,13 +463,14 @@ public class MessageFlusher {
      * @return how many messages sent
      * @throws Exception
      */
-    public int sendMessagesToSubscriptions(String destination, String storageQueue, Set<DeliverableAndesMetadata>
+    public int sendMessagesToSubscriptions(String destination, String storageQueue, Map<Long, DeliverableAndesMetadata>
             messages)
             throws Exception {
 
-        if(messages.iterator().hasNext()) {
+        Collection<DeliverableAndesMetadata> messageValues = messages.values();
+        if(messageValues.iterator().hasNext()) {
             //identify if this messages address queues or topics. There CANNOT be a mix
-            DeliverableAndesMetadata firstMessage = messages.iterator().next();
+            DeliverableAndesMetadata firstMessage = messageValues.iterator().next();
             boolean isTopic = firstMessage.isTopic();
 
             if (isTopic) {
