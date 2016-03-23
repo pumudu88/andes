@@ -107,6 +107,17 @@ public class LocalSubscription  extends BasicSubscription implements InboundSubs
 
     }
 
+    /**
+     * Forcefully disconnects protocol subscriber from server. This is initiated
+     * by a server admin using the management console or during a network
+     * partition.
+     *
+     * @throws AndesException
+     */
+    public void forcefullyDisconnect() throws AndesException {
+        log.info("forcefully disconnecting subscription: " + this.toString());
+        subscription.forcefullyDisconnect();
+    }
 
     /**
      * Send message to the underlying protocol subscriber

@@ -17,6 +17,15 @@
  */
 package org.wso2.andes.kernel;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.andes.configuration.AndesConfigurationManager;
@@ -26,15 +35,12 @@ import org.wso2.andes.kernel.slot.SlotDeliveryWorkerManager;
 import org.wso2.andes.server.cluster.coordination.ClusterCoordinationHandler;
 import org.wso2.andes.server.cluster.coordination.ClusterNotification;
 import org.wso2.andes.server.cluster.coordination.hazelcast.HazelcastAgent;
+import org.wso2.andes.server.cluster.error.detection.NetworkPartitionListener;
 import org.wso2.andes.subscription.BasicSubscription;
 import org.wso2.andes.subscription.LocalSubscription;
 import org.wso2.andes.subscription.SubscriptionStore;
 
-import java.util.*;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-public class AndesSubscriptionManager {
+public class AndesSubscriptionManager implements NetworkPartitionListener {
 
     private static Log log = LogFactory.getLog(AndesSubscriptionManager.class);
 
@@ -59,6 +65,12 @@ public class AndesSubscriptionManager {
 
     public void init() {
         subscriptionStore = AndesContext.getInstance().getSubscriptionStore();
+        
+        //register subscription manager to listen to network partition events.
+        if (AndesContext.getInstance().isClusteringEnabled()){
+            // network partition detection works only when clustered.
+            AndesContext.getInstance().getClusterAgent().addNetworkPartitionListener(this);
+        }
         //adding subscription listeners
         addSubscriptionListener(new OrphanedMessageHandler());
         addSubscriptionListener(new ClusterCoordinationHandler(HazelcastAgent.getInstance()));
@@ -263,6 +275,38 @@ public class AndesSubscriptionManager {
 
     }
 
+    
+    /**
+     * Forcefully disconnect all message consumers (/ subscribers) connected to
+     * this node. Typically broker node should do take such a action when a
+     * network partition happens ( since coordinator in other partition will
+     * also start distributing slots (hence messages) which will lead to
+     * inconsistent
+     * state in both partitions. Even if there is a exception trying to
+     * disconnect any of the connection this method will continue with other
+     * connections.
+     *
+     */
+    public void forcefullyDisconnectAllLocalSubscriptionsOfNode() {
+
+        Set<LocalSubscription> activeSubscriptions = subscriptionStore.getActiveLocalSubscribers(true);
+        activeSubscriptions.addAll(subscriptionStore.getActiveLocalSubscribers(false));
+
+        if (!activeSubscriptions.isEmpty()) {
+            for (LocalSubscription sub : activeSubscriptions) {
+
+                try {
+                    sub.forcefullyDisconnect();
+                } catch (AndesException disconnectError) {
+                    log.error("error occurred while forcefullly disconnecting subscription: " +
+                              sub.toString(), disconnectError);
+                }
+            }
+        }
+
+    }
+    
+    
     /**
      * check if any local active non durable subscription exists for a given topic consider
      * hierarchical subscription case as well
@@ -557,5 +601,29 @@ public class AndesSubscriptionManager {
                 subscribedNode, subscribedTime, targetQueue, targetQueueOwner, targetQueueBoundExchange,
                 targetQueueBoundExchangeType, isTargetQueueAutoDeletable, hasExternalSubscriptions);
 
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * In a event of a network partition (or nodes being offline, stopped,
+     * crashed) if minimum node count becomes less than required
+     * subscription manager will disconnect all consumers connected to this
+     * node.
+     * </p>
+     */
+    @Override
+    public void minimumNodeCountNotFulfilled(int currentNodeCount) {
+        log.warn("Minimum node count is below required, forcefully disconnecting all subscribers");
+        forcefullyDisconnectAllLocalSubscriptionsOfNode();
+    }
+
+    /**
+     * {@inheritDoc}
+     * No action required.
+     */
+    @Override
+    public void minimumNodeCountFulfilled(int currentNodeCount) {
+        // No action required.
     }
 }

@@ -29,6 +29,7 @@ import org.wso2.andes.kernel.AndesSubscription.SubscriptionType;
 import org.wso2.andes.kernel.SubscriptionListener.SubscriptionChange;
 import org.wso2.andes.metrics.MetricsConstants;
 import org.wso2.andes.mqtt.utils.MQTTUtils;
+import org.wso2.andes.server.cluster.error.detection.NetworkPartitionListener;
 import org.wso2.carbon.metrics.manager.Gauge;
 import org.wso2.carbon.metrics.manager.Level;
 import org.wso2.carbon.metrics.manager.MetricManager;
@@ -49,6 +50,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SubscriptionStore {
+	
     private static final String TOPIC_PREFIX = "topic.";
 
     private static final String QUEUE_PREFIX = "queue.";
@@ -80,8 +82,8 @@ public class SubscriptionStore {
 
     public SubscriptionStore() throws AndesException {
         andesContextStore = AndesContext.getInstance().getAndesContextStore();
-        clusterSubscriptionProcessor = ClusterSubscriptionProcessorBuilder.getBitMapClusterSubscriptionProcessor();
-
+        clusterSubscriptionProcessor = ClusterSubscriptionProcessorBuilder.getBitMapClusterSubscriptionProcessor();        
+        
         //Add subscribers gauge to metrics manager
         MetricManager.gauge(Level.INFO, MetricsConstants.QUEUE_SUBSCRIBERS, new QueueSubscriberGauge());
         //Add topic gauge to metrics manager
