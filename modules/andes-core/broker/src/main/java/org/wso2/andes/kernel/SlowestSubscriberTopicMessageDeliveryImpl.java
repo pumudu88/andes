@@ -25,7 +25,12 @@ import org.wso2.andes.server.store.MessageMetaDataType;
 import org.wso2.andes.subscription.LocalSubscription;
 import org.wso2.andes.subscription.SubscriptionStore;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * This class implements topic message delivery. Topic message delivery to multiple subscriptions will be controlled
@@ -44,12 +49,12 @@ public class SlowestSubscriberTopicMessageDeliveryImpl implements MessageDeliver
      * {@inheritDoc}
      */
     @Override
-    public int deliverMessageToSubscriptions(String destination, String storageQueue,Set<DeliverableAndesMetadata>
+    public int deliverMessageToSubscriptions(String destination, String storageQueue, Map<Long, DeliverableAndesMetadata>
             messages) throws
             AndesException {
 
         int sentMessageCount = 0;
-        Iterator<DeliverableAndesMetadata> iterator = messages.iterator();
+        Iterator<DeliverableAndesMetadata> iterator = messages.values().iterator();
         List<DeliverableAndesMetadata> droppedTopicMessagesList = new ArrayList<>();
 
 

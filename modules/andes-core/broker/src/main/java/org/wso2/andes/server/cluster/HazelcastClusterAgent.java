@@ -22,6 +22,7 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.IdGenerator;
 import com.hazelcast.core.Member;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.andes.configuration.AndesConfigurationManager;
@@ -79,18 +80,22 @@ public class HazelcastClusterAgent implements ClusterAgent {
     private IMap<String, String> coordinatorNodeDetailsMap;
 
     /**
+     * Node identifier (set in broker.xml) of each node is stored in this map against the <ip>:<port> of that node.
+     *
+     *  Key - <ip>:<port>
+     *  Value - NodeId
+     */
+    private IMap<String, String> nodeIdMap;
+
+    /**
      * Hold thrift server details
      */
     private IMap<Object, Object> thriftServerDetailsMap;
 
-    /**
-     * Attribute name used for storing node id inside hazelcast member
-     */
-    private static final String NODE_ID_ATTRIBUTE = "nodeId";
-
     public HazelcastClusterAgent(HazelcastInstance hazelcastInstance) {
         this.hazelcastInstance = hazelcastInstance;
         this.isCoordinator = new AtomicBoolean(false);
+        nodeIdMap = hazelcastInstance.getMap(CoordinationConstants.NODE_ID_MAP_NAME);
     }
 
     /**
@@ -134,7 +139,11 @@ public class HazelcastClusterAgent implements ClusterAgent {
      * @return id of the node
      */
     public String getIdOfNode(Member node) {
-        return node.getStringAttribute(NODE_ID_ATTRIBUTE);
+        String nodeId = nodeIdMap.get(node.getSocketAddress().toString());
+        if(StringUtils.isEmpty(nodeId)) {
+            nodeId = node.getSocketAddress().toString();
+        }
+        return nodeId;
     }
 
     /**
@@ -162,11 +171,10 @@ public class HazelcastClusterAgent implements ClusterAgent {
     public void start(ClusterManager manager) throws AndesException{
         this.manager = manager;
 
-        hazelcastInstance.getCluster().getLocalMember().setStringAttribute(NODE_ID_ATTRIBUTE, getLocalNodeIdentifier());
-
+        Member localMember = hazelcastInstance.getCluster().getLocalMember();
+        nodeIdMap.set(localMember.getSocketAddress().toString(), getLocalNodeIdentifier());
         //Checking for duplicate node ids in cluster
         Set<Member> members = hazelcastInstance.getCluster().getMembers();
-        Member localMember = hazelcastInstance.getCluster().getLocalMember();
         for (Member member : members) {
             if (getIdOfNode(member).equals(getLocalNodeIdentifier()) &&
                 localMember != member) {

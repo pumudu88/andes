@@ -169,6 +169,32 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
      * {@inheritDoc}
      */
     @Override
+    public boolean isSubscriptionExist(String subscriptionId) throws AndesException {
+        Connection connection = null;
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+
+        try {
+            connection = getConnection();
+            preparedStatement = connection.prepareStatement(RDBMSConstants.PS_IS_SUBSCRIPTION_EXIST);
+            preparedStatement.setString(1, subscriptionId);
+            resultSet = preparedStatement.executeQuery();
+
+            return resultSet.next();
+        } catch (SQLException e) {
+            throw rdbmsStoreUtils.convertSQLException("Error occurred while "
+                    + RDBMSConstants.TASK_CHECK_SUBSCRIPTION_EXISTENCE, e);
+        } finally {
+            close(resultSet, RDBMSConstants.TASK_CHECK_SUBSCRIPTION_EXISTENCE);
+            close(preparedStatement, RDBMSConstants.TASK_CHECK_SUBSCRIPTION_EXISTENCE);
+            close(connection, RDBMSConstants.TASK_CHECK_SUBSCRIPTION_EXISTENCE);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void storeDurableSubscription(String destinationIdentifier, String subscriptionID,
                                          String subscriptionEncodeAsStr) throws AndesException {
 
@@ -182,7 +208,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement = connection.prepareStatement(
                     RDBMSConstants.PS_INSERT_DURABLE_SUBSCRIPTION);
-
             preparedStatement.setString(1, destinationIdentifier);
             preparedStatement.setString(2, subscriptionID);
             preparedStatement.setString(3, subscriptionEncodeAsStr);
@@ -216,7 +241,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement = connection.prepareStatement(
                     RDBMSConstants.PS_UPDATE_DURABLE_SUBSCRIPTION);
-
             preparedStatement.setString(1, subscriptionEncodeAsStr);
             preparedStatement.setString(2, destinationIdentifier);
             preparedStatement.setString(3, subscriptionID);
@@ -247,7 +271,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
         try {
             connection = getConnection();
             preparedStatement = connection.prepareStatement(RDBMSConstants.PS_UPDATE_DURABLE_SUBSCRIPTION_BY_ID);
-
             for (Map.Entry<String, String> entry : subscriptions.entrySet()) {
                 preparedStatement.setString(1, entry.getValue());
                 preparedStatement.setString(2, entry.getKey());
@@ -283,7 +306,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
             connection = getConnection();
             preparedStatement = connection.prepareStatement(RDBMSConstants
                     .PS_DELETE_DURABLE_SUBSCRIPTION);
-
             preparedStatement.setString(1, destinationIdentifier);
             preparedStatement.setString(2, subscriptionID);
             preparedStatement.executeUpdate();
@@ -416,7 +438,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
                 preparedStatement = connection.prepareStatement(RDBMSConstants
                         .PS_INSERT_QUEUE_COUNTER);
-
                 preparedStatement.setString(1, destinationQueueName);
                 preparedStatement.setLong(2, 0); // initial count is set to zero for parameter two
                 preparedStatement.executeUpdate();
@@ -516,7 +537,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
             // RESET the queue counter to 0
             preparedStatement = connection
                     .prepareStatement(RDBMSConstants.PS_RESET_QUEUE_COUNT);
-
             preparedStatement.setString(1, storageQueueName);
 
             preparedStatement.execute();
@@ -994,12 +1014,12 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
      * @param task       task that was done before closing
      */
     protected void close(Connection connection, String task) {
-        if (connection != null) {
-            try {
+        try {
+            if (connection != null && !connection.isClosed()) {
                 connection.close();
-            } catch (SQLException e) {
-                logger.error("Failed to close connection after " + task, e);
             }
+        } catch (SQLException e) {
+            logger.error("Failed to close connection after " + task, e);
         }
     }
 
@@ -1067,7 +1087,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement =
                     connection.prepareStatement(RDBMSConstants.PS_INSERT_SLOT);
-
             preparedStatement.setLong(1, startMessageId);
             preparedStatement.setLong(2, endMessageId);
             preparedStatement.setString(3, storageQueueName);
@@ -1093,7 +1112,8 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
     @Override
     public boolean deleteSlot(long startMessageId, long endMessageId) throws AndesException {
         Connection connection = null;
-        PreparedStatement preparedStatement = null;
+        PreparedStatement deleteNonOverlappingSlotPS = null;
+        PreparedStatement getSlotPS = null;
 
         boolean slotDeleted;
 
@@ -1101,22 +1121,20 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             connection = getConnection();
 
-            preparedStatement = connection.prepareStatement(RDBMSConstants.PS_DELETE_NON_OVERLAPPING_SLOT);
+            deleteNonOverlappingSlotPS = connection.prepareStatement(RDBMSConstants.PS_DELETE_NON_OVERLAPPING_SLOT);
+            deleteNonOverlappingSlotPS.setLong(1, startMessageId);
+            deleteNonOverlappingSlotPS.setLong(2, endMessageId);
 
-            preparedStatement.setLong(1, startMessageId);
-            preparedStatement.setLong(2, endMessageId);
-
-            int rowsAffected = preparedStatement.executeUpdate();
+            int rowsAffected = deleteNonOverlappingSlotPS.executeUpdate();
             connection.commit();
 
             if (rowsAffected == 0) {
                 // Check if the Slot exists in Store
-                preparedStatement = connection.prepareStatement(RDBMSConstants.PS_GET_SLOT);
+                getSlotPS = connection.prepareStatement(RDBMSConstants.PS_GET_SLOT);
+                getSlotPS.setLong(1, startMessageId);
+                getSlotPS.setLong(2, endMessageId);
 
-                preparedStatement.setLong(1, startMessageId);
-                preparedStatement.setLong(2, endMessageId);
-
-                ResultSet resultSet = preparedStatement.executeQuery();
+                ResultSet resultSet = getSlotPS.executeQuery();
 
                 // slotDeleted set to true if there is no overlapping slot in the DB
                 slotDeleted = !resultSet.next();
@@ -1142,7 +1160,8 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
             rollback(connection, RDBMSConstants.TASK_DELETE_SLOT);
             throw rdbmsStoreUtils.convertSQLException("Error occurred while " + errMsg, e);
         } finally {
-            close(preparedStatement, RDBMSConstants.TASK_DELETE_SLOT);
+            close(deleteNonOverlappingSlotPS, RDBMSConstants.TASK_DELETE_SLOT);
+            close(getSlotPS,RDBMSConstants.TASK_DELETE_SLOT);
             close(connection, RDBMSConstants.TASK_DELETE_SLOT);
         }
     }
@@ -1161,7 +1180,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement =
                     connection.prepareStatement(RDBMSConstants.PS_DELETE_SLOTS_BY_QUEUE_NAME);
-
             preparedStatement.setString(1, queueName);
 
             preparedStatement.executeUpdate();
@@ -1190,7 +1208,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement =
                     connection.prepareStatement(RDBMSConstants.PS_DELETE_MESSAGE_IDS_BY_QUEUE_NAME);
-
             preparedStatement.setString(1, queueName);
 
             preparedStatement.executeUpdate();
@@ -1221,7 +1238,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement =
                     connection.prepareStatement(RDBMSConstants.PS_INSERT_SLOT_ASSIGNMENT);
-
             preparedStatement.setString(1, nodeId);
             preparedStatement.setString(2, queueName);
             preparedStatement.setLong(3, startMsgId);
@@ -1255,7 +1271,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement =
                     connection.prepareStatement(RDBMSConstants.PS_DELETE_SLOT_ASSIGNMENT);
-
             preparedStatement.setLong(1, startMessageId);
             preparedStatement.setLong(2, endMessageId);
 
@@ -1288,7 +1303,6 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement = connection
                     .prepareStatement(RDBMSConstants.PS_DELETE_SLOT_ASSIGNMENT_BY_QUEUE_NAME);
-
             preparedStatement.setString(1, nodeId);
             preparedStatement.setString(2, queueName);
 
@@ -1322,6 +1336,7 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
 
             preparedStatement =
                     connection.prepareStatement(RDBMSConstants.PS_SELECT_UNASSIGNED_SLOT);
+
             preparedStatement.setString(1, queueName);
             resultSet = preparedStatement.executeQuery();
 
@@ -1382,31 +1397,34 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
      */
     public void setQueueToLastAssignedId(String queueName, long messageId) throws AndesException {
         Connection connection = null;
-        PreparedStatement preparedStatement = null;
+        PreparedStatement selectQueueToLastAssignIDPS   = null;
+        PreparedStatement updateQueueToLastAssignedIDPS = null;
+        PreparedStatement insertQueueToLastAssignedIDPS = null;
         ResultSet resultSet;
 
         try {
 
             connection = getConnection();
-            preparedStatement =
+            selectQueueToLastAssignIDPS =
                     connection.prepareStatement(RDBMSConstants.PS_SELECT_QUEUE_TO_LAST_ASSIGNED_ID);
-            preparedStatement.setString(1, queueName);
-            resultSet = preparedStatement.executeQuery();
+            selectQueueToLastAssignIDPS.setString(1, queueName);
+            resultSet = selectQueueToLastAssignIDPS.executeQuery();
 
             if(resultSet.next()){
-                preparedStatement =
+                updateQueueToLastAssignedIDPS =
                         connection.prepareStatement(RDBMSConstants.PS_UPDATE_QUEUE_TO_LAST_ASSIGNED_ID);
-                preparedStatement.setLong(1, messageId);
-                preparedStatement.setString(2, queueName);
+                updateQueueToLastAssignedIDPS.setLong(1, messageId);
+                updateQueueToLastAssignedIDPS.setString(2, queueName);
+                updateQueueToLastAssignedIDPS.executeUpdate();
             } else {
-                preparedStatement =
+                insertQueueToLastAssignedIDPS =
                         connection.prepareStatement(RDBMSConstants.PS_INSERT_QUEUE_TO_LAST_ASSIGNED_ID);
 
-                preparedStatement.setString(1, queueName);
-                preparedStatement.setLong(2, messageId);
+                insertQueueToLastAssignedIDPS.setString(1, queueName);
+                insertQueueToLastAssignedIDPS.setLong(2, messageId);
+                insertQueueToLastAssignedIDPS.executeUpdate();
             }
 
-            preparedStatement.executeUpdate();
             connection.commit();
 
         } catch (SQLException e) {
@@ -1416,7 +1434,9 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
             rollback(connection, RDBMSConstants.TASK_SET_QUEUE_TO_LAST_ASSIGNED_ID);
             throw rdbmsStoreUtils.convertSQLException("Error occurred while " + errMsg, e);
         } finally {
-            close(preparedStatement, RDBMSConstants.TASK_SET_QUEUE_TO_LAST_ASSIGNED_ID);
+            close(selectQueueToLastAssignIDPS, RDBMSConstants.TASK_SET_QUEUE_TO_LAST_ASSIGNED_ID);
+            close(updateQueueToLastAssignedIDPS, RDBMSConstants.TASK_SET_QUEUE_TO_LAST_ASSIGNED_ID);
+            close(insertQueueToLastAssignedIDPS, RDBMSConstants.TASK_SET_QUEUE_TO_LAST_ASSIGNED_ID);
             close(connection, RDBMSConstants.TASK_SET_QUEUE_TO_LAST_ASSIGNED_ID);
         }
     }
@@ -1458,32 +1478,35 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
      */
     public void setLocalSafeZoneOfNode(String nodeId, long messageId) throws AndesException {
         Connection connection = null;
-        PreparedStatement preparedStatement = null;
+        PreparedStatement selectNodeToLastPublishedIdPS = null;
+        PreparedStatement updateNodeToLastPublishedIdPS = null;
+        PreparedStatement insertNodeToLastPublishedIdPS = null;
         ResultSet resultSet;
 
         try {
 
             connection = getConnection();
 
-            preparedStatement =
+            selectNodeToLastPublishedIdPS =
                     connection.prepareStatement(RDBMSConstants.PS_SELECT_NODE_TO_LAST_PUBLISHED_ID);
-            preparedStatement.setString(1, nodeId);
-            resultSet = preparedStatement.executeQuery();
+            selectNodeToLastPublishedIdPS.setString(1, nodeId);
+            resultSet = selectNodeToLastPublishedIdPS.executeQuery();
 
             if(resultSet.next()){
-                preparedStatement =
+                updateNodeToLastPublishedIdPS =
                         connection.prepareStatement(RDBMSConstants.PS_UPDATE_NODE_TO_LAST_PUBLISHED_ID);
-                preparedStatement.setLong(1, messageId);
-                preparedStatement.setString(2, nodeId);
+                updateNodeToLastPublishedIdPS.setLong(1, messageId);
+                updateNodeToLastPublishedIdPS.setString(2, nodeId);
+                updateNodeToLastPublishedIdPS.executeUpdate();
             } else {
-                preparedStatement =
+                insertNodeToLastPublishedIdPS =
                         connection.prepareStatement(RDBMSConstants.PS_INSERT_NODE_TO_LAST_PUBLISHED_ID);
 
-                preparedStatement.setString(1, nodeId);
-                preparedStatement.setLong(2, messageId);
+                insertNodeToLastPublishedIdPS.setString(1, nodeId);
+                insertNodeToLastPublishedIdPS.setLong(2, messageId);
+                insertNodeToLastPublishedIdPS.executeUpdate();
             }
 
-            preparedStatement.executeUpdate();
             connection.commit();
         } catch (SQLException e) {
             String errMsg =
@@ -1492,7 +1515,9 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
             rollback(connection, RDBMSConstants.TASK_SET_NODE_TO_LAST_PUBLISHED_ID);
             throw rdbmsStoreUtils.convertSQLException("Error occurred while " + errMsg, e);
         } finally {
-            close(preparedStatement, RDBMSConstants.TASK_SET_NODE_TO_LAST_PUBLISHED_ID);
+            close(selectNodeToLastPublishedIdPS, RDBMSConstants.TASK_SET_NODE_TO_LAST_PUBLISHED_ID);
+            close(updateNodeToLastPublishedIdPS, RDBMSConstants.TASK_SET_NODE_TO_LAST_PUBLISHED_ID);
+            close(insertNodeToLastPublishedIdPS, RDBMSConstants.TASK_SET_NODE_TO_LAST_PUBLISHED_ID);
             close(connection, RDBMSConstants.TASK_SET_NODE_TO_LAST_PUBLISHED_ID);
         }
     }
@@ -1828,25 +1853,31 @@ public class RDBMSAndesContextStoreImpl implements AndesContextStore {
     @Override
     public void clearSlotStorage() throws AndesException {
         Connection connection = null;
-        PreparedStatement preparedStatement = null;
+        PreparedStatement clearSlotTablePS = null;
+        PreparedStatement clearSlotMessageIdTablePS = null;
+        PreparedStatement clearNodeToLastPublisherIdPS = null;
+        PreparedStatement clearQueueToLastAssignedIdPS = null;
 
         try {
             connection = getConnection();
-            preparedStatement = connection.prepareStatement(RDBMSConstants.PS_CLEAR_SLOT_TABLE);
-            preparedStatement.executeUpdate();
-            preparedStatement = connection.prepareStatement(RDBMSConstants.PS_CLEAR_SLOT_MESSAGE_ID_TABLE);
-            preparedStatement.executeUpdate();
-            preparedStatement = connection.prepareStatement(RDBMSConstants.PS_CLEAR_NODE_TO_LAST_PUBLISHED_ID);
-            preparedStatement.executeUpdate();
-            preparedStatement = connection.prepareStatement(RDBMSConstants.PS_CLEAR_QUEUE_TO_LAST_ASSIGNED_ID);
-            preparedStatement.executeUpdate();
+            clearSlotTablePS = connection.prepareStatement(RDBMSConstants.PS_CLEAR_SLOT_TABLE);
+            clearSlotTablePS.executeUpdate();
+            clearSlotMessageIdTablePS = connection.prepareStatement(RDBMSConstants.PS_CLEAR_SLOT_MESSAGE_ID_TABLE);
+            clearSlotMessageIdTablePS.executeUpdate();
+            clearNodeToLastPublisherIdPS = connection.prepareStatement(RDBMSConstants.PS_CLEAR_NODE_TO_LAST_PUBLISHED_ID);
+            clearNodeToLastPublisherIdPS.executeUpdate();
+            clearQueueToLastAssignedIdPS = connection.prepareStatement(RDBMSConstants.PS_CLEAR_QUEUE_TO_LAST_ASSIGNED_ID);
+            clearQueueToLastAssignedIdPS.executeUpdate();
             connection.commit();
         } catch (SQLException e) {
             String errMsg = RDBMSConstants.TASK_CLEAR_SLOT_TABLES;
             rollback(connection, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
             throw rdbmsStoreUtils.convertSQLException("Error occurred while " + errMsg, e);
         } finally {
-            close(preparedStatement, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
+            close(clearSlotTablePS, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
+            close(clearSlotMessageIdTablePS, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
+            close(clearNodeToLastPublisherIdPS, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
+            close(clearQueueToLastAssignedIdPS, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
             close(connection, RDBMSConstants.TASK_CLEAR_SLOT_TABLES);
         }
     }
