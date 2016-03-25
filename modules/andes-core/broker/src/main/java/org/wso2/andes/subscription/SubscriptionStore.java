@@ -33,7 +33,11 @@ import org.wso2.carbon.metrics.manager.Gauge;
 import org.wso2.carbon.metrics.manager.Level;
 import org.wso2.carbon.metrics.manager.MetricManager;
 
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -41,7 +45,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.HashMap;
 
 public class SubscriptionStore {
     private static final String TOPIC_PREFIX = "topic.";
@@ -999,6 +1002,59 @@ public class SubscriptionStore {
 
         //update all the stored durable subscriptions to be inactive
         andesContextStore.updateDurableSubscriptions(modifiedSubscriptions);
+    }
+
+    /**
+     * Writes cluster and local subscription maps to a file
+     *
+     * @param fileToWrite File path to the file.
+     * @throws AndesException
+     */
+    public void dumpSubscriptionStoreInfo(String fileToWrite) throws AndesException {
+        try {
+            FileWriter information = new FileWriter(fileToWrite);
+            information.append("CLUSTER SUBSCRIPTION MAP - TOPIC").append("\n");
+            for (Entry<String, Set<AndesSubscription>> stringSetEntry : clusterTopicSubscriptionMap.entrySet()) {
+                information.append("======").append(stringSetEntry.getKey()).append("======").append("\n");
+                for (AndesSubscription andesSubscription : stringSetEntry.getValue()) {
+                    information.append(andesSubscription.encodeAsStr()).append("\n");
+                }
+            }
+
+            information.append("\n").append("\n").append("LOCAL SUBSCRIPTION MAP - TOPIC").append("\n");
+            for (Entry<String, Set<LocalSubscription>> stringSetEntry : localTopicSubscriptionMap.entrySet()) {
+                information.append("======").append(stringSetEntry.getKey()).append("======").append("\n");
+                for (LocalSubscription andesSubscription : stringSetEntry.getValue()) {
+                    information.append(andesSubscription.encodeAsStr()).append("\n");
+                }
+            }
+
+            information.append("\n").append("\n").append("CLUSTER SUBSCRIPTION MAP - QUEUE").append("\n");
+            for (Entry<String, Set<AndesSubscription>> stringSetEntry : clusterQueueSubscriptionMap.entrySet()) {
+                information.append("======").append(stringSetEntry.getKey()).append("======").append("\n");
+                for (AndesSubscription andesSubscription : stringSetEntry.getValue()) {
+                    information.append(andesSubscription.encodeAsStr()).append("\n");
+                }
+            }
+
+            information.append("\n").append("\n").append("LOCAL SUBSCRIPTION MAP - QUEUE").append("\n");
+            for (Entry<String, Set<LocalSubscription>> stringSetEntry : localQueueSubscriptionMap.entrySet()) {
+                information.append("======").append(stringSetEntry.getKey()).append("======").append("\n");
+                for (LocalSubscription andesSubscription : stringSetEntry.getValue()) {
+                    information.append(andesSubscription.encodeAsStr()).append("\n");
+                }
+            }
+
+            information.flush();
+            information.close();
+
+        } catch (FileNotFoundException e) {
+            log.error("File to write is not found", e);
+            throw new AndesException("File to write is not found", e);
+        } catch (IOException e) {
+            log.error("Error while dumping subscription store info to file", e);
+            throw new AndesException("Error while dumping subscription store info to file", e);
+        }
     }
 
     /**
