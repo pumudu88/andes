@@ -287,12 +287,12 @@ public class Broker
 
             isActorSet = true;
 
-            startAMQPListener(config, options, serverConfig);
-
             /**
              * Boot andes kernel
              */
             AndesKernelBoot.bootAndesKernel();
+
+            startAMQPListener(config, options, serverConfig);
 
             AMQPUtils.DEFAULT_CONTENT_CHUNK_SIZE = AndesConfigurationManager.readValue(
                     AndesConfiguration.PERFORMANCE_TUNING_MAX_CONTENT_CHUNK_SIZE);

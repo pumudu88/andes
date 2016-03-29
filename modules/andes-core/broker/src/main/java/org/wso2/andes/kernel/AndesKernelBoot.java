@@ -19,7 +19,6 @@
 package org.wso2.andes.kernel;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.hazelcast.util.executor.NamedThreadPoolExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.andes.configuration.AndesConfigurationManager;
@@ -33,7 +32,7 @@ import org.wso2.andes.server.cluster.ClusterAgent;
 import org.wso2.andes.server.cluster.ClusterManagementInformationMBean;
 import org.wso2.andes.server.cluster.ClusterManager;
 import org.wso2.andes.server.cluster.coordination.hazelcast.HazelcastAgent;
-import org.wso2.andes.server.information.management.MessageStatusInformationMBean;
+import org.wso2.andes.server.information.management.BrokerInformationMBean;
 import org.wso2.andes.server.information.management.SubscriptionManagementInformationMBean;
 import org.wso2.andes.server.queue.DLCQueueUtils;
 import org.wso2.andes.server.virtualhost.VirtualHost;
@@ -381,9 +380,9 @@ public class AndesKernelBoot {
                 SubscriptionManagementInformationMBean();
         subscriptionManagementInformationMBean.register();
 
-        MessageStatusInformationMBean messageStatusInformationMBean = new
-                MessageStatusInformationMBean();
-        messageStatusInformationMBean.register();
+        BrokerInformationMBean brokerInformationMBean = new
+                BrokerInformationMBean();
+        brokerInformationMBean.register();
     }
 
     /**

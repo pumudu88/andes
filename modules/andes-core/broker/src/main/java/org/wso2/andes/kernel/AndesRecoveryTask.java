@@ -71,6 +71,7 @@ public class AndesRecoveryTask implements Runnable, StoreHealthListener {
 	public void run() {
 
         if(!isRunning.compareAndSet(false, true)) {
+	        log.warn("AndesRecoveryTask is already running");
             return;
         }
         try {
@@ -92,9 +93,13 @@ public class AndesRecoveryTask implements Runnable, StoreHealthListener {
         }
     }
 
+	/**
+	 * Executes andes recovery task
+	 */
     public void executeNow() {
         run();
     }
+
 	/**
 	 * reload and recover exchanges,
 	 * Queues, Bindings and Subscriptions
