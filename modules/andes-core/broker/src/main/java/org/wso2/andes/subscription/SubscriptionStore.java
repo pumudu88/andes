@@ -36,7 +36,9 @@ import org.wso2.carbon.metrics.manager.MetricManager;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -680,7 +682,7 @@ public class SubscriptionStore {
             String destinationTopic = subscription.getSubscribedDestination();
             //Store the subscription
             String destinationIdentifier = (subscription.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destinationTopic;
-            String subscriptionID = subscription.getSubscribedNode() + "_" + subscription.getSubscriptionID();
+            String subscriptionID = generateSubscriptionID(subscription);
 
             if (type == SubscriptionChange.ADDED) {
                 if(!andesContextStore.isSubscriptionExist(subscriptionID)) {
@@ -781,9 +783,8 @@ public class SubscriptionStore {
         String destinationTopic = subscription.getSubscribedDestination();
         //Update the subscription
         String destinationIdentifier = (subscription.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destinationTopic;
-        String subscriptionID = subscription.getSubscribedNode() + "_" + subscription.getSubscriptionID();
 
-        andesContextStore.updateDurableSubscription(destinationIdentifier, subscriptionID, subscription.encodeAsStr());
+        andesContextStore.updateDurableSubscription(destinationIdentifier, generateSubscriptionID(subscription), subscription.encodeAsStr());
     }
 
     /**
@@ -795,7 +796,7 @@ public class SubscriptionStore {
         String destination = subscriptionToRemove.getSubscribedDestination();
         String destinationIdentifier = (subscriptionToRemove.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destination;
         andesContextStore.removeDurableSubscription(destinationIdentifier,
-                subscriptionToRemove.getSubscribedNode() + "_" + subscriptionToRemove.getSubscriptionID());
+                generateSubscriptionID(subscriptionToRemove));
         if(log.isDebugEnabled()) {
             log.debug("Directly removed cluster subscription subscription identifier = " + destinationIdentifier + " "
                       + "destination = " + destination);
@@ -855,7 +856,7 @@ public class SubscriptionStore {
             }
             String destinationIdentifier = (subscriptionToRemove.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destination;
             andesContextStore.removeDurableSubscription(destinationIdentifier,
-                    subscription.getSubscribedNode() + "_" + subscriptionID);
+                    generateSubscriptionID(subscription));
             if (log.isDebugEnabled()) {
                 log.debug("Subscription Removed Locally for  " + destination + "@" + subscriptionID + " "
                           + subscriptionToRemove);
@@ -884,7 +885,7 @@ public class SubscriptionStore {
                 String destinationIdentifier =
                         (subscription.isBoundToTopic() ? TOPIC_PREFIX : QUEUE_PREFIX) + destination;
                 andesContextStore.removeDurableSubscription(destinationIdentifier,
-                        subscription.getSubscribedNode() + "_" + subscription.getSubscriptionID());
+                        generateSubscriptionID(subscription));
                 if (log.isDebugEnabled()) {
                     log.debug("Subscription Removed for  " + destination + "@"
                               + subscription.getSubscriptionID() + " " + subscriptionToRemove);
@@ -959,8 +960,7 @@ public class SubscriptionStore {
                         String destinationIdentifier = (subscription.isBoundToTopic() ?
                                                         TOPIC_PREFIX : QUEUE_PREFIX) +
                                                        destinationQueue;
-                        String subscriptionID = subscription.getSubscribedNode() + "_" +
-                                                subscription.getSubscriptionID();
+                        String subscriptionID = generateSubscriptionID(subscription);
                         andesContextStore.updateDurableSubscription(destinationIdentifier,
                                 subscriptionID, subscription.encodeAsStr());
                         if (log.isDebugEnabled()) {
@@ -1013,6 +1013,8 @@ public class SubscriptionStore {
     public void dumpSubscriptionStoreInfo(String fileToWrite) throws AndesException {
         try {
             FileWriter information = new FileWriter(fileToWrite);
+            information.append("Current Time : ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss,S").
+                                                                                    format(new Date())).append("\n");
             information.append("CLUSTER SUBSCRIPTION MAP - TOPIC").append("\n");
             for (Entry<String, Set<AndesSubscription>> stringSetEntry : clusterTopicSubscriptionMap.entrySet()) {
                 information.append("======").append(stringSetEntry.getKey()).append("======").append("\n");
@@ -1103,5 +1105,16 @@ public class SubscriptionStore {
         }
 
         return wildCardSubscription;
+    }
+
+    /**
+     * Generates a unique ID for a subscription based on node ID, destination and subscriber's ID
+     *
+     * @param subscription The subscription
+     * @return A subscription ID
+     */
+    private String generateSubscriptionID(AndesSubscription subscription) {
+        return subscription.getSubscribedNode() + "_" + subscription.getSubscribedDestination() + "_" + subscription
+                                                                                                .getSubscriptionID();
     }
 }
