@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 
@@ -163,7 +164,7 @@ public class MessageFlusher {
          * in-memory message list scheduled to be delivered. These messages will be flushed
          * to subscriber
          */
-        private Map<Long, DeliverableAndesMetadata> readButUndeliveredMessages = new
+        private ConcurrentMap<Long, DeliverableAndesMetadata> readButUndeliveredMessages = new
                 ConcurrentSkipListMap<>();
 
         /***
@@ -187,6 +188,18 @@ public class MessageFlusher {
          */
         public void bufferMessage(DeliverableAndesMetadata message) {
             readButUndeliveredMessages.put(message.getMessageID(), message);
+            message.markAsBuffered();
+            //Tracing message
+            MessageTracer.trace(message, MessageTracer.METADATA_BUFFERED_FOR_DELIVERY);
+
+        }
+
+        /**
+         * Re-buffer messages in case of failures
+         * @param message Message metadata to buffer
+         */
+        public void reBufferMessage(DeliverableAndesMetadata message) {
+            readButUndeliveredMessages.putIfAbsent(message.getMessageID(), message);
             message.markAsBuffered();
             //Tracing message
             MessageTracer.trace(message, MessageTracer.METADATA_BUFFERED_FOR_DELIVERY);
@@ -397,7 +410,7 @@ public class MessageFlusher {
         try {
             MessageDeliveryInfo messageDeliveryInfo = getMessageDeliveryInfo(destination);
             for (DeliverableAndesMetadata metadata : messages) {
-                messageDeliveryInfo.bufferMessage(metadata);
+                messageDeliveryInfo.reBufferMessage(metadata);
             }
         } catch (AndesException e) {
             log.fatal("Error scheduling messages for delivery", e);
@@ -545,7 +558,7 @@ public class MessageFlusher {
      */
     public void reQueueMessage(DeliverableAndesMetadata message) {
         String destination = message.getDestination();
-        subscriptionCursar4QueueMap.get(destination).bufferMessage(message);
+        subscriptionCursar4QueueMap.get(destination).reBufferMessage(message);
     }
 
     public static MessageFlusher getInstance() {
