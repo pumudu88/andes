@@ -492,6 +492,11 @@ public enum AndesConfiguration implements ConfigurationProperty {
     MAX_TRANSACTION_BATCH_SIZE ("transaction/maxBatchSizeInBytes", "10000000", Integer.class),
 
     /**
+     * Number of connections reserved at a given time for transactional publishing tasks.
+     * Transaction requests exceeding this limit will fail.
+     */
+    MAX_PARRALEL_TRANSACTION_COUNT("transaction/dbConnectionPoolSize", "10", Integer.class),
+    /**
      * Maximum wait time (in seconds) for a transactional publisher commit, rollback or close event to complete on
      * server side.
      */

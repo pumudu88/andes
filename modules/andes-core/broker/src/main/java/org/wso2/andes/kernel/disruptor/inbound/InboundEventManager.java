@@ -26,8 +26,10 @@ import com.lmax.disruptor.dsl.ProducerType;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.andes.configuration.AndesConfigurationManager;
+import org.wso2.andes.configuration.enums.AndesConfiguration;
 import org.wso2.andes.kernel.AndesAckData;
 import org.wso2.andes.kernel.AndesChannel;
+import org.wso2.andes.kernel.AndesException;
 import org.wso2.andes.kernel.AndesMessage;
 import org.wso2.andes.kernel.DisablePubAckImpl;
 import org.wso2.andes.kernel.MessagingEngine;
@@ -46,6 +48,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.wso2.andes.configuration.enums.AndesConfiguration.MAX_TRANSACTION_BATCH_SIZE;
+import static org.wso2.andes.configuration.enums.AndesConfiguration.MAX_TRANSACTION_WAIT_TIMEOUT;
 import static org.wso2.andes.configuration.enums.AndesConfiguration.PERFORMANCE_TUNING_ACKNOWLEDGEMENT_HANDLER_BATCH_SIZE;
 import static org.wso2.andes.configuration.enums.AndesConfiguration.PERFORMANCE_TUNING_ACK_HANDLER_COUNT;
 import static org.wso2.andes.configuration.enums.AndesConfiguration.PERFORMANCE_TUNING_CONTENT_CHUNK_HANDLER_COUNT;
@@ -76,6 +79,34 @@ public class InboundEventManager {
     private Disruptor<InboundEventContainer> disruptor;
     private final DisablePubAckImpl disablePubAck;
 
+    /**
+     * Maximum batch size for a transaction. Limit is set for content size of the batch.
+     * Exceeding this limit will lead to a failure in the subsequent commit request.
+     */
+    private final int MAX_TX_BATCH_SIZE;
+
+    /**
+     * Transaction events such as commit, rollback and close are blocking calls waiting on
+     * {@link com.google.common.util.concurrent.SettableFuture} objects. This is the maximum
+     * wait time for the completion of those events
+     */
+    private final long TX_EVENT_TIMEOUT;
+
+    /**
+     * Maximum number of allowed transactions count
+     */
+    private final int MAX_PARALLEL_TX_COUNT;
+
+    /**
+     * Current active transactions count
+     */
+    private AtomicInteger txConnectionsCount;
+
+    /**
+     * handle all message related functions.
+     */
+    private MessagingEngine messagingEngine;
+
     public InboundEventManager(SubscriptionStore subscriptionStore,
                                MessagingEngine messagingEngine) {
 
@@ -93,17 +124,19 @@ public class InboundEventManager {
                 PERFORMANCE_TUNING_PARALLEL_TRANSACTION_MESSAGE_WRITERS);
         Integer transactionBatchSize = AndesConfigurationManager.readValue(
                 MAX_TRANSACTION_BATCH_SIZE);
-
+        MAX_TX_BATCH_SIZE = AndesConfigurationManager.readValue(AndesConfiguration.MAX_TRANSACTION_BATCH_SIZE);
+        MAX_PARALLEL_TX_COUNT = AndesConfigurationManager.readValue(AndesConfiguration.MAX_PARRALEL_TRANSACTION_COUNT);
+        TX_EVENT_TIMEOUT = AndesConfigurationManager.readValue(AndesConfiguration.MAX_TRANSACTION_WAIT_TIMEOUT);
         disablePubAck = new DisablePubAckImpl();
         int maxContentChunkSize = AndesConfigurationManager.readValue(
                 PERFORMANCE_TUNING_MAX_CONTENT_CHUNK_SIZE);
         int contentChunkHandlerCount = AndesConfigurationManager.readValue(
                 PERFORMANCE_TUNING_CONTENT_CHUNK_HANDLER_COUNT);
-
+        txConnectionsCount = new AtomicInteger(0);
         ThreadFactory namedThreadFactory = new ThreadFactoryBuilder()
                 .setNameFormat("DisruptorInboundEventThread-%d").build();
         ExecutorService executorPool = Executors.newCachedThreadPool(namedThreadFactory);
-
+        this.messagingEngine = messagingEngine;
 
         disruptor = new Disruptor<>(InboundEventContainer.getFactory(),
                 bufferSize,
@@ -317,6 +350,24 @@ public class InboundEventManager {
      */
     public void requestTransactionCloseEvent(InboundTransactionEvent transactionEvent, AndesChannel channel) {
         requestTransactionEvent(transactionEvent, TRANSACTION_CLOSE_EVENT, channel);
+        txConnectionsCount.decrementAndGet();
+    }
+
+    /**
+     * Get a new transaction object. This object handles the lifecycle of transactional message publishing.
+     * Once the transactional session is closed this object needs to be closed as well.
+     *
+     * @return InboundTransactionEvent
+     * @throws AndesException
+     */
+    public InboundTransactionEvent newTransaction(AndesChannel channel) throws AndesException {
+        if(txConnectionsCount.incrementAndGet() > MAX_PARALLEL_TX_COUNT ) {
+            txConnectionsCount.decrementAndGet();
+            throw new AndesException("Maximum number of parallel transactions limit " + MAX_PARALLEL_TX_COUNT +
+                    " reached. ");
+        }
+        return new InboundTransactionEvent(
+                messagingEngine, this, MAX_TX_BATCH_SIZE, TX_EVENT_TIMEOUT, channel);
     }
 
     /**
