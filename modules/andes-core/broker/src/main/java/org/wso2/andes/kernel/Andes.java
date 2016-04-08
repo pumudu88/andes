@@ -21,7 +21,6 @@ package org.wso2.andes.kernel;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.andes.configuration.AndesConfigurationManager;
-import org.wso2.andes.configuration.enums.AndesConfiguration;
 import org.wso2.andes.kernel.disruptor.inbound.InboundEventManager;
 import org.wso2.andes.kernel.disruptor.inbound.InboundAndesChannelEvent;
 import org.wso2.andes.kernel.disruptor.inbound.InboundBindingEvent;
@@ -103,19 +102,6 @@ public class Andes {
     private static final int safeZoneUpdateTriggerInterval = 3000;
 
     /**
-     * Maximum batch size for a transaction. Limit is set for content size of the batch.
-     * Exceeding this limit will lead to a failure in the subsequent commit request.
-     */
-    private final int MAX_TX_BATCH_SIZE;
-
-    /**
-     * Transaction events such as commit, rollback and close are blocking calls waiting on
-     * {@link com.google.common.util.concurrent.SettableFuture} objects. This is the maximum
-     * wait time for the completion of those events
-     */
-    private final long TX_EVENT_TIMEOUT;
-
-    /**
      * Instance of AndesAPI returned.
      *
      * @return AndesAPI
@@ -130,9 +116,6 @@ public class Andes {
     private Andes() {
         PURGE_TIMEOUT_SECONDS = AndesConfigurationManager.readValue(PERFORMANCE_TUNING_PURGED_COUNT_TIMEOUT);
         this.flowControlManager = new FlowControlManager();
-        MAX_TX_BATCH_SIZE = AndesConfigurationManager.
-                readValue(AndesConfiguration.MAX_TRANSACTION_BATCH_SIZE);
-        TX_EVENT_TIMEOUT = AndesConfigurationManager.readValue(AndesConfiguration.MAX_TRANSACTION_WAIT_TIMEOUT);
     }
 
     /**
@@ -693,8 +676,7 @@ public class Andes {
      * @throws AndesException
      */
     public InboundTransactionEvent newTransaction(AndesChannel channel) throws AndesException {
-        return new InboundTransactionEvent(messagingEngine, inboundEventManager,
-                MAX_TX_BATCH_SIZE, TX_EVENT_TIMEOUT, channel);
+        return inboundEventManager.newTransaction(channel);
     }
 
     /**
