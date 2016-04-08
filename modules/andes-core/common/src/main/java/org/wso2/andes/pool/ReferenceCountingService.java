@@ -32,5 +32,5 @@ public interface ReferenceCountingService {
      *
      * @return shared executor service
      */
-    public ExecutorService getPool();
+    ExecutorService getPool();
 }
