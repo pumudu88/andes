@@ -690,7 +690,6 @@ public class Andes {
         return MessagingEngine.getInstance().getRetainedMessageByTopic(topicName);
     }
 
-
     /**
      * Get andes content for given message metadata.
      *
@@ -700,6 +699,14 @@ public class Andes {
      */
     public AndesContent getRetainedMessageContent(AndesMessageMetadata metadata) throws AndesException {
         return MessagingEngine.getInstance().getRetainedMessageContent(metadata);
+    }
+
+    /**
+     * On a member left event trigger recovery event. This will trigger a mock submit slot event to coordinator for all
+     * the queues and topics. This is to avoid any lost submit slot events from left member node
+     */
+    public void triggerRecoveryEvent() {
+        inboundEventManager.publishRecoveryEvent();
     }
 
 }
