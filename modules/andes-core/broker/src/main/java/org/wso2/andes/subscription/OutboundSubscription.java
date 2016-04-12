@@ -29,6 +29,15 @@ import java.util.UUID;
  */
 public interface OutboundSubscription {
 
+	/**
+	 * Forcefully disconnects protocol subscriber from server. This is called
+	 * when a server admin wants to disconnect a subscriber using management
+	 * console.
+	 *
+	 * @throws AndesException
+	 */
+	void forcefullyDisconnect() throws AndesException;
+	
     /**
      * Deliver the message and content to the subscriber
      * @param messageMetadata metadata of the message
@@ -61,4 +70,5 @@ public interface OutboundSubscription {
      */
     public String getStorageQueueName(String destination, String subscribedNode);
 
+   
 }

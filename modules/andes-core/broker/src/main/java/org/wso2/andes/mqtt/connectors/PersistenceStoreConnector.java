@@ -101,7 +101,13 @@ public class PersistenceStoreConnector implements MQTTConnector {
                 publisher = new MQTTPublisherChannel(messageContext.getChannel());
                 publisherTopicCorrelate.put(messageContext.getPublisherID(), publisher);
                 //Finally will register the publisher channel for flow controlling
-                AndesChannel publisherChannel = Andes.getInstance().createChannel(publisher);
+                AndesChannel publisherChannel = null;
+                try {
+                    publisherChannel = Andes.getInstance().createChannel(publisher);
+                } catch (AndesException ex) {
+                    throw new MQTTException("unable to create a new channel " , ex);
+                }
+                        
                 //Set channel details
                 //Substring to remove leading slash character from remote address
                 if (null != messageContext.getChannel()) {

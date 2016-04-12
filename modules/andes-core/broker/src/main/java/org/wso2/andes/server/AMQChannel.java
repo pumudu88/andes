@@ -17,8 +17,26 @@
  */
 package org.wso2.andes.server;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import javax.management.JMException;
+
 import org.apache.log4j.Logger;
 import org.wso2.andes.AMQException;
+import org.wso2.andes.AMQInternalException;
 import org.wso2.andes.AMQSecurityException;
 import org.wso2.andes.amqp.QpidAndesBridge;
 import org.wso2.andes.configuration.qpid.ConfigStore;
@@ -81,22 +99,6 @@ import org.wso2.andes.server.txn.ServerTransaction;
 import org.wso2.andes.server.virtualhost.AMQChannelMBean;
 import org.wso2.andes.server.virtualhost.VirtualHost;
 import org.wso2.andes.store.StoredAMQPMessage;
-
-import javax.management.JMException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class AMQChannel implements SessionConfig, AMQSessionModel
 {
@@ -210,17 +212,12 @@ public class AMQChannel implements SessionConfig, AMQSessionModel
         _id = getConfigStore().createId();
         _actor.message(ChannelMessages.CREATE());
 
-        getConfigStore().addConfiguredObject(this);
-
-        _messageStore = messageStore;
-
-        // by default the session is non-transactional
-        _transaction = new AutoCommitTransaction(_messageStore);
-
         // message tracking related to this channel is initialised
         Andes.getInstance().clientConnectionCreated(_id);
         beginPublisherTransaction = false;
-        andesChannel = Andes.getInstance().createChannel(new FlowControlListener() {
+        
+        
+        FlowControlListener flowControlListener = new FlowControlListener() {
             @Override
             public void block() {
                 if (!isSubscriptionChannel()) {
@@ -234,8 +231,35 @@ public class AMQChannel implements SessionConfig, AMQSessionModel
                     unblockChannel();
                 }
             }
-        });
+            
+            @Override
+            public void disconnect(){
+                try {
+                    mgmtClose();
+                } catch (AMQException e) {
+                    _logger.error("error occured while trying to disconnect channel. Id: " + _channelId, e);
+                }
+            }
+        };
+        
+        try {
+            andesChannel = Andes.getInstance().createChannel(flowControlListener);
+        } catch (Exception ex) {
+            throw new AMQInternalException("unable to create channel due to internal server error",
+                                           ex);
+        }
+        
+        
+        
+        
+        getConfigStore().addConfiguredObject(this);
 
+        _messageStore = messageStore;
+
+        // by default the session is non-transactional
+        _transaction = new AutoCommitTransaction(_messageStore);
+
+     
         try {
             _managedObject = new AMQChannelMBean(this);
             _managedObject.register();
